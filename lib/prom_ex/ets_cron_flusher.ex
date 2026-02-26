@@ -8,6 +8,8 @@ defmodule PromEx.ETSCronFlusher do
 
   use GenServer
 
+  require Logger
+
   @flush_timeout 10_000
 
   @doc """
@@ -58,7 +60,13 @@ defmodule PromEx.ETSCronFlusher do
         PromEx.get_metrics(state.prom_ex_module)
       end)
 
-    Task.await(flush_task, @flush_timeout)
+    case Task.yield(flush_task, @flush_timeout) || Task.shutdown(flush_task) do
+      {:ok, _result} ->
+        :ok
+
+      nil ->
+        Logger.warning("[PromEx.ETSCronFlusher] ETS flush timed out after #{@flush_timeout}ms")
+    end
 
     timer_ref = schedule_flush(state)
     {:noreply, %{state | timer_ref: timer_ref}}
